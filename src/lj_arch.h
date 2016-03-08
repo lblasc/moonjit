@@ -295,10 +295,19 @@
 #if LJ_TARGET_CONSOLE
 #define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOFFI		1
+#if LJ_TARGET_PS3
+#define LJ_ARCH_PPC_TOC		1
+#endif
 #elif LJ_ARCH_BITS == 64
-#define LJ_ARCH_PPC64		1
-#define LJ_TARGET_GC64		1
+#define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOJIT		1	/* NYI */
+#define LJ_ARCH_NOFFI		1	/* NYI */
+#if _CALL_ELF == 2
+#define LJ_ARCH_PPC_ELFV2	1
+#else
+#define LJ_ARCH_PPC_TOC		1
+#define LJ_ARCH_PPC_TOCENV	1
+#endif
 #endif
 
 #if _ARCH_PWR7
@@ -443,8 +452,11 @@
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if !LJ_ARCH_PPC64 && (defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN)))
-#error "No support for little-endian PPC32"
+#if (defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN)))
+#error "No support for little-endian PPC"
+#endif
+#if LJ_ARCH_PPC_ELFV2
+#error "No support for PPC ELFv2"
 #endif
 #if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
