@@ -296,7 +296,7 @@
 #define LJ_ARCH_PPC32ON64	1
 #define LJ_ARCH_NOFFI		1
 #if LJ_TARGET_PS3
-#define LJ_ARCH_PPC_TOC		1
+#define LJ_ARCH_PPC_OPD		1
 #endif
 #elif LJ_ARCH_BITS == 64
 #define LJ_ARCH_PPC32ON64	1
@@ -305,8 +305,8 @@
 #if _CALL_ELF == 2
 #define LJ_ARCH_PPC_ELFV2	1
 #else
-#define LJ_ARCH_PPC_TOC		1
-#define LJ_ARCH_PPC_TOCENV	1
+#define LJ_ARCH_PPC_OPD		1
+#define LJ_ARCH_PPC_OPDENV	1
 #endif
 #endif
 
@@ -452,9 +452,6 @@
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if LJ_ARCH_PPC_ELFV2
-#error "No support for PPC ELFv2"
-#endif
 #if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
 #error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
 #endif
