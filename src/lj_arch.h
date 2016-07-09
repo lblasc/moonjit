@@ -452,9 +452,6 @@
 #error "No support for ILP32 model on ARM64"
 #endif
 #elif LJ_TARGET_PPC
-#if (defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN)))
-#error "No support for little-endian PPC"
-#endif
 #if LJ_ARCH_PPC_ELFV2
 #error "No support for PPC ELFv2"
 #endif
