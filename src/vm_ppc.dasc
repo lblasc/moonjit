@@ -5529,7 +5529,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   slwi TMP3, RC, 3
     |  bge >5				// Index points after array part?
     |.if FPU
-    |   lfdux f0, TMP3, TMP1
+    |   lfdux f0, TMP1, TMP3
     |.else
     |   lwzux CARG1, TMP3, TMP1
     |   lwz CARG2, 4(TMP3)
