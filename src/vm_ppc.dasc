@@ -3703,7 +3703,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bl ->vm_sfi2d_1
     |.endif
     |4:
-    |  .FPU lfd f1, BASE, RD
+    |  .FPU lfdx f1, BASE, RD
     |5:
     |.if FPU
     |  fcmpu cr0, f0, f1
