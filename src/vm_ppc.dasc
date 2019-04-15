@@ -5486,7 +5486,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  mr TMP2, BASE
     |  add BASE, BASE, RA
     |  lwz TMP1, WORD_HI-24(BASE)
-    |   lwz LFUNC:RB, WORD_LO-20(BASE)
+    |   lwz LFUNC:RB, WORD_LO-24(BASE)
     |.if FPU
     |    lfd f1, -8(BASE)
     |    lfd f0, -16(BASE)
