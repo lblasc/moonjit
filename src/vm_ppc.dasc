@@ -4666,14 +4666,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  cmplw RC, TMP0
     |   slwi TMP3, RC, 3
     |  bge >5				// Index points after array part?
-    |  lwzx TMP2, TMP1, TMP3
-    |   lfdx f0, TMP1, TMP3
+    |  lfdux f0, TMP3, TMP1
+    |   lwz TMP2, WORD_HI(TMP3)
     |  checknil TMP2
     |     lwz INS, -4(PC)
     |  beq >4
     |.if DUALNUM
-    |   stw RC, 4(RA)
-    |   stw TISNUM, 0(RA)
+    |   stw RC, WORD_LO(RA)
+    |   stw TISNUM, WORD_HI(RA)
     |.else
     |   tonum_u f1, RC
     |.endif
