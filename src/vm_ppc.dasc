@@ -3283,9 +3283,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQS: case BC_ISNES:
     vk = op == BC_ISEQS;
     |  // RA = src*8, RD = str_const*8 (~), JMP with RD = target
-    |  lwzx TMP0, BASE_HI, RA
+    |  lwzux TMP0, RA, BASE
     |   srwi RD, RD, 1
-    |  lwzx STR:TMP3, BASE_LO, RA
+    |  lwz STR:TMP3, 4(RA)
     |    lwz TMP2, 0(PC)
     |   subfic RD, RD, -4
     |    addi PC, PC, 4
@@ -4457,9 +4457,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETB:
     |  // RA = src*8, RB = table*8, RC = index*8
-    |  lwzx CARG1, BASE_HI, RB
+    |  lwzux CARG1, RB, BASE
     |   srwi TMP0, RC, 3
-    |   lwzx TAB:RB, BASE_LO, RB
+    |   lwz TAB:RB, 4(RB)
     |  checktab CARG1; bne ->vmeta_tsetb
     |  lwz TMP1, TAB:RB->asize
     |   lwz TMP2, TAB:RB->array
@@ -4496,11 +4496,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETR:
     |  // RA = dst*8, RB = table*8, RC = key*8
-    |  lwzx TAB:CARG2, BASE_LO, RB
+    |  add RB, BASE, RB
+    |  lwz TAB:CARG2, 4(RB)
     |.if DUALNUM
+    |  add RC, BASE, RC
     |    lbz TMP3, TAB:CARG2->marked
     |  lwz TMP0, TAB:CARG2->asize
-    |  lwzx CARG3, BASE_LO, RC
+    |  lwz CARG3, 4(RC)
     |   lwz TMP1, TAB:CARG2->array
     |.else
     |  lfdx f0, BASE, RC
