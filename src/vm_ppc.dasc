@@ -4208,10 +4208,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  sub TMP1, TMP0, TMP1
     |  add NODE:TMP2, NODE:TMP2, TMP1	// node = tab->node + (idx*32-idx*8)
     |1:
-    |  lwz CARG1, NODE:TMP2->key
-    |   lwz TMP0, 4+offsetof(Node, key)(NODE:TMP2)
-    |    lwz CARG2, NODE:TMP2->val
-    |     lwz TMP1, 4+offsetof(Node, val)(NODE:TMP2)
+    |  lwz CARG1, WORD_HI+offsetof(Node, key)(NODE:TMP2)
+    |   lwz TMP0, WORD_LO+offsetof(Node, key)(NODE:TMP2)
+    |    lwz CARG2, WORD_HI+offsetof(Node, val)(NODE:TMP2)
+    |     lwz TMP1, WORD_LO+offsetof(Node, val)(NODE:TMP2)
     |  checkstr CARG1; bne >4
     |   cmpw TMP0, STR:RC; bne >4
     |    checknil CARG2; beq >5		// Key found, but nil value?
@@ -4245,7 +4245,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  lwz TMP1, TAB:RB->asize
     |   lwz TMP2, TAB:RB->array
     |  cmplw TMP0, TMP1; bge ->vmeta_tgetb
-    |  lwzx TMP1, TMP2, RC
+    |  .if ENDIAN_LE
+    |    addi TMP1, TMP2, 4
+    |    lwzx TMP1, TMP1, RC
+    |  .else
+    |    lwzx TMP1, TMP2, RC
+    |  .endif
     |   lfdx f0, TMP2, RC
     |  checknil TMP1; beq >5
     |1:
