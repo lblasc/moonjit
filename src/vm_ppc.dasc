@@ -399,6 +399,7 @@
 |.define WORD_LO,	4
 |.define WORD_HI,	0
 |.define WORD_BLO,	7
+|.define BASE_LO,	BASEP4
 |.define BASE_HI,	BASE
 |.macro lwzux2, hi, lo, base, idx
 |  lwzux hi, base, idx
@@ -465,9 +466,7 @@
 |// Call decode and dispatch.
 |.macro ins_callt
 |  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
-|.if ENDIAN_LE
 |  addi BASEP4, BASE, 4
-|.endif
 |  lwz PC, LFUNC:RB->pc
 |  lwz INS, 0(PC)
 |   addi PC, PC, 4
@@ -894,9 +893,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmplwi TMP0, 1
   |.endif
   |     lwz PC, FRAME_CONTPC(RB)	// Restore PC from [cont|PC].
-  |.if ENDIAN_LE
   |  addi BASEP4, BASE, 4
-  |.endif
   |   addi TMP2, RD, WORD_HI-8
   |    lwz TMP1, LFUNC:TMP1->pc
   |   stwx TISNIL, RA, TMP2		// Ensure one valid arg.
@@ -1913,9 +1910,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  ins_next1
   |  // Adjust BASE. KBASE is assumed to be set for the calling frame.
   |   sub BASE, RA, TMP0
-  |.if ENDIAN_LE
   |   addi BASEP4, BASE, 4
-  |.endif
   |  ins_next2
   |
   |6:  // Fill up results with nil.
@@ -2596,9 +2591,7 @@ static void build_subroutines(BuildCtx *ctx)
   |3:
   |  lp BASE, L->base
   |4:  // Re-dispatch to static ins.
-  |.if ENDIAN_LE
   |  addi BASEP4, BASE, 4
-  |.endif
   |  lwz INS, -4(PC)
   |  decode_OPP TMP1, INS
   |   decode_RB8 RB, INS
@@ -2654,9 +2647,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lp BASE, L->base
   |   lp TMP0, L->top
   |   stw ZERO, SAVE_PC			// Invalidate for subsequent line hook.
-  |.if ENDIAN_LE
   |  addi BASEP4, BASE, 4
-  |.endif
   |  sub NARGS8:RC, TMP0, BASE
   |  add RA, BASE, RA
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)
@@ -2703,9 +2694,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mr CARG2, PC
   |  bl extern lj_dispatch_stitch	// (jit_State *J, const BCIns *pc)
   |  lp BASE, L->base
-  |.if ENDIAN_LE
   |  addi BASEP4, BASE, 4
-  |.endif
   |  b ->cont_nop
   |
   |9:
@@ -2724,9 +2713,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // HOOK_PROFILE is off again, so re-dispatch to dynamic instruction.
   |  lp BASE, L->base
   |  subi PC, PC, 4
-  |.if ENDIAN_LE
   |  addi BASEP4, BASE, 4
-  |.endif
   |  b ->cont_nop
 #endif
   |
