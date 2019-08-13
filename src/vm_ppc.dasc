@@ -1012,7 +1012,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  lfd f14, 0(CRET1)
   |  b ->BC_TGETR_Z
   |1:
+  |// ??? Optimise.
+  |.if ENDIAN_LE
   |  stwx TISNIL, BASE_HI, RA
+  |.else
+  |  stwx TISNIL, BASE, RA
+  |.endif
   |  b ->cont_nop
   |
   |//-----------------------------------------------------------------------
