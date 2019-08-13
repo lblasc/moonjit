@@ -110,6 +110,9 @@
 |.define LREG,		r18	// Register holding lua_State (also in SAVE_L).
 |.define MULTRES,	r19	// Size of multi-result: (nresults+1)*8.
 |.define JGL,		r31	// On-trace: global_State + 32768.
+|.if ENDIAN_LE
+|.define BASEP4,	r25	// Equal to BASE + 4
+|.endif
 |
 |// Constants for type-comparisons, stores and conversions. C callee-save.
 |.define TISNUM,	r22
@@ -198,17 +201,30 @@
 |.define SAVE_GPR_,	112     // .. 112+18*8: 64 bit GPR saves.
 |//			48(sp)  // Callee parameter save area (ABI mandated).
 |.define SAVE_TOC,	40(sp)  // TOC save area.
+|.if ENDIAN_LE
+|.define TMPD_HI,	36(sp)  // \ Link editor temp (ABI mandated).
+|.define TMPD_LO,	32(sp)  // /
+|.define TONUM_HI,	28(sp)  // \ Compiler temp (ABI mandated).
+|.define TONUM_LO,	24(sp)  // /
+|.else
 |.define TMPD_LO,	36(sp)  // \ Link editor temp (ABI mandated).
 |.define TMPD_HI,	32(sp)  // /
 |.define TONUM_LO,	28(sp)  // \ Compiler temp (ABI mandated).
 |.define TONUM_HI,	24(sp)  // /
+|.endif
 |// Next frame lr:	16(sp)
 |// Next frame cr:	8(sp)
 |// Back chain for sp:	0(sp)	<-- sp while in interpreter
 |
+|.if ENDIAN_LE
+|.define TMPD_BLO,	32(sp)
+|.define TMPD,		TMPD_LO
+|.define TONUM_D,	TONUM_LO
+|.else
 |.define TMPD_BLO,	39(sp)
 |.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
+|.endif
 |
 |.endif
 |.else
@@ -226,16 +242,29 @@
 |.define SAVE_PC,	32(sp)
 |.define SAVE_MULTRES,	28(sp)
 |.define UNUSED1,	24(sp)
+|.if ENDIAN_LE
+|.define TMPD_HI,	20(sp)
+|.define TMPD_LO,	16(sp)
+|.define TONUM_HI,	12(sp)
+|.define TONUM_LO,	8(sp)
+|.else
 |.define TMPD_LO,	20(sp)
 |.define TMPD_HI,	16(sp)
 |.define TONUM_LO,	12(sp)
 |.define TONUM_HI,	8(sp)
+|.endif
 |// Next frame lr:	4(sp)
 |// Back chain for sp:	0(sp)	<-- sp while in interpreter
 |
+|.if ENDIAN_LE
+|.define TMPD_BLO,	16(sp)
+|.define TMPD,		TMPD_LO
+|.define TONUM_D,	TONUM_LO
+|.else
 |.define TMPD_BLO,	23(sp)
 |.define TMPD,		TMPD_HI
 |.define TONUM_D,	TONUM_HI
+|.endif
 |
 |.endif
 |
@@ -350,8 +379,33 @@
 |//-----------------------------------------------------------------------
 |
 |// Access to frame relative to BASE.
+|.if ENDIAN_LE
+|.define FRAME_PC,	-4
+|.define FRAME_FUNC,	-8
+|.define FRAME_CONTPC,	-12
+|.define FRAME_CONTRET,	-16
+|.define WORD_LO,	0
+|.define WORD_HI,	4
+|.define WORD_BLO,	0
+|.define BASE_LO,	BASE
+|.define BASE_HI,	BASEP4
+|.macro lwzux2, hi, lo, base, idx
+|  lwzux lo, base, idx
+|  lwz hi, 4(base)
+|.endmacro
+|.else
 |.define FRAME_PC,	-8
 |.define FRAME_FUNC,	-4
+|.define FRAME_CONTPC,	-16
+|.define FRAME_CONTRET,	-12
+|.define WORD_LO,	4
+|.define WORD_HI,	0
+|.define WORD_BLO,	7
+|.macro lwzux2, hi, lo, base, idx
+|  lwzux hi, base, idx
+|  lwz lo, 4(base)
+|.endmacro
+|.endif
 |
 |// Instruction decode.
 |.macro decode_OP4, dst, ins; rlwinm dst, ins, 2, 22, 29; .endmacro
@@ -412,6 +466,9 @@
 |// Call decode and dispatch.
 |.macro ins_callt
 |  // BASE = new base, RB = LFUNC/CFUNC, RC = nargs*8, FRAME_PC(BASE) = PC
+|.if ENDIAN_LE
+|  addi BASEP4, BASE, 4
+|.endif
 |  lwz PC, LFUNC:RB->pc
 |  lwz INS, 0(PC)
 |   addi PC, PC, 4
@@ -504,7 +561,12 @@ static void build_subroutines(BuildCtx *ctx)
   |  lwz PC, FRAME_PC(TMP2)		// Fetch PC of previous frame.
   |  mr BASE, TMP2			// Restore caller base.
   |  // Prepending may overwrite the pcall frame, so do it at the end.
-  |   stwu TMP1, FRAME_PC(RA)		// Prepend true to results.
+  |  .if ENDIAN_LE
+  |    addi RA, RA, -8
+  |    stw TMP1, WORD_HI(RA)		// Prepend true to results.
+  |  .else
+  |    stwu TMP1, -8(RA)		// Prepend true to results.
+  |  .endif
   |
   |->vm_returnc:
   |  addi RD, RD, 8			// RD = (nresults+1)*8.
@@ -560,7 +622,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lwz TMP1, L->maxstack
   |  cmplw BASE, TMP1
   |  bge >8
-  |  stw TISNIL, 0(BASE)
+  |  stw TISNIL, WORD_HI(BASE)
   |  addi RD, RD, 8
   |  addi BASE, BASE, 8
   |  b <2
@@ -631,7 +693,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  la RA, -8(BASE)			// Results start at BASE-8.
   |     stw TMP3, TMPD
   |   addi DISPATCH, DISPATCH, GG_G2DISP
-  |  stw TMP1, 0(RA)			// Prepend false to error message.
+  |  stw TMP1, WORD_HI(RA)		// Prepend false to error message.
   |  li RD, 16				// 2 results: false + error message.
   |    st_vmstate
   |     lfs TONUM, TMPD
@@ -772,8 +834,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->vm_call_dispatch:
   |  // TMP2 = old base, BASE = new base, RC = nargs*8, PC = caller PC
-  |  lwz TMP0, FRAME_PC(BASE)
-  |   lwz LFUNC:RB, FRAME_FUNC(BASE)
+  |  lwz TMP0, WORD_HI-8(BASE)
+  |   lwz LFUNC:RB, WORD_LO-8(BASE)
   |  checkfunc TMP0; bne ->vmeta_call
   |
   |->vm_call_dispatch_f:
@@ -825,15 +887,18 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |->cont_dispatch:
   |  // BASE = meta base, RA = resultptr, RD = (nresults+1)*8
-  |  lwz TMP0, -12(BASE)		// Continuation.
+  |  lwz TMP0, FRAME_CONTRET(BASE)	// Continuation.
   |   mr RB, BASE
   |   mr BASE, TMP2			// Restore caller BASE.
   |    lwz LFUNC:TMP1, FRAME_FUNC(TMP2)
   |.if FFI
   |  cmplwi TMP0, 1
   |.endif
-  |     lwz PC, -16(RB)			// Restore PC from [cont|PC].
-  |   subi TMP2, RD, 8
+  |     lwz PC, FRAME_CONTPC(RB)	// Restore PC from [cont|PC].
+  |.if ENDIAN_LE
+  |  addi BASEP4, BASE, 4
+  |.endif
+  |   addi TMP2, RD, WORD_HI-8
   |    lwz TMP1, LFUNC:TMP1->pc
   |   stwx TISNIL, RA, TMP2		// Ensure one valid arg.
   |.if P64
@@ -880,20 +945,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
   |  li TMP0, LJ_TSTR
   |   decode_RB8 RB, INS
-  |  stw STR:RC, 4(CARG3)
+  |  stw STR:RC, WORD_LO(CARG3)
   |   add CARG2, BASE, RB
-  |  stw TMP0, 0(CARG3)
+  |  stw TMP0, WORD_HI(CARG3)
   |  b >1
   |
   |->vmeta_tgets:
   |  la CARG2, DISPATCH_GL(tmptv)(DISPATCH)
   |  li TMP0, LJ_TTAB
-  |  stw TAB:RB, 4(CARG2)
+  |  stw TAB:RB, WORD_LO(CARG2)
   |   la CARG3, DISPATCH_GL(tmptv2)(DISPATCH)
-  |  stw TMP0, 0(CARG2)
+  |  stw TMP0, WORD_HI(CARG2)
   |   li TMP1, LJ_TSTR
-  |   stw STR:RC, 4(CARG3)
-  |   stw TMP1, 0(CARG3)
+  |   stw STR:RC, WORD_LO(CARG3)
+  |   stw TMP1, WORD_HI(CARG3)
   |  b >1
   |
   |->vmeta_tgetb:			// TMP0 = index
@@ -904,8 +969,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
   |   add CARG2, BASE, RB
   |.if DUALNUM
-  |  stw TISNUM, 0(CARG3)
-  |  stw TMP0, 4(CARG3)
+  |  stw TISNUM, WORD_HI(CARG3)
+  |  stw TMP0, WORD_LO(CARG3)
   |.else
   |  stfd f0, 0(CARG3)
   |.endif
@@ -933,7 +998,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = base, L->top = new base, stack = cont/func/t/k
   |  subfic TMP1, BASE, FRAME_CONT
   |  lp BASE, L->top
-  |  stw PC, -16(BASE)			// [cont|PC]
+  |  stw PC, FRAME_CONTPC(BASE)		// [cont|PC]
   |   add PC, TMP1, BASE
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
   |   li NARGS8:RC, 16			// 2 args for func(t, k).
@@ -947,7 +1012,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  lfd f14, 0(CRET1)
   |  b ->BC_TGETR_Z
   |1:
-  |  stwx TISNIL, BASE, RA
+  |  stwx TISNIL, BASE_HI, RA
   |  b ->cont_nop
   |
   |//-----------------------------------------------------------------------
@@ -956,20 +1021,20 @@ static void build_subroutines(BuildCtx *ctx)
   |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
   |  li TMP0, LJ_TSTR
   |   decode_RB8 RB, INS
-  |  stw STR:RC, 4(CARG3)
+  |  stw STR:RC, WORD_LO(CARG3)
   |   add CARG2, BASE, RB
-  |  stw TMP0, 0(CARG3)
+  |  stw TMP0, WORD_HI(CARG3)
   |  b >1
   |
   |->vmeta_tsets:
   |  la CARG2, DISPATCH_GL(tmptv)(DISPATCH)
   |  li TMP0, LJ_TTAB
-  |  stw TAB:RB, 4(CARG2)
+  |  stw TAB:RB, WORD_LO(CARG2)
   |   la CARG3, DISPATCH_GL(tmptv2)(DISPATCH)
-  |  stw TMP0, 0(CARG2)
+  |  stw TMP0, WORD_HI(CARG2)
   |   li TMP1, LJ_TSTR
-  |   stw STR:RC, 4(CARG3)
-  |   stw TMP1, 0(CARG3)
+  |   stw STR:RC, WORD_LO(CARG3)
+  |   stw TMP1, WORD_HI(CARG3)
   |  b >1
   |
   |->vmeta_tsetb:			// TMP0 = index
@@ -980,8 +1045,8 @@ static void build_subroutines(BuildCtx *ctx)
   |  la CARG3, DISPATCH_GL(tmptv)(DISPATCH)
   |   add CARG2, BASE, RB
   |.if DUALNUM
-  |  stw TISNUM, 0(CARG3)
-  |  stw TMP0, 4(CARG3)
+  |  stw TISNUM, WORD_HI(CARG3)
+  |  stw TMP0, WORD_LO(CARG3)
   |.else
   |  stfd f0, 0(CARG3)
   |.endif
@@ -1010,7 +1075,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = base, L->top = new base, stack = cont/func/t/k/(v)
   |  subfic TMP1, BASE, FRAME_CONT
   |  lp BASE, L->top
-  |  stw PC, -16(BASE)			// [cont|PC]
+  |  stw PC, FRAME_CONTPC(BASE)		// [cont|PC]
   |   add PC, TMP1, BASE
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
   |   li NARGS8:RC, 24			// 3 args for func(t, k, v)
