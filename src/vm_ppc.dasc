@@ -1091,17 +1091,9 @@ static void build_subroutines(BuildCtx *ctx)
   |->vmeta_comp:
   |  mr CARG1, L
   |   subi PC, PC, 4
-  |.if DUALNUM
-  |  mr CARG2, RA
-  |.else
   |  add CARG2, BASE, RA
-  |.endif
   |   stw PC, SAVE_PC
-  |.if DUALNUM
-  |  mr CARG3, RD
-  |.else
   |  add CARG3, BASE, RD
-  |.endif
   |   stp BASE, L->base
   |  decode_OP1 CARG4, INS
   |  bl extern lj_meta_comp  // (lua_State *L, TValue *o1, *o2, int op)
@@ -1188,8 +1180,8 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |->vmeta_unm:
-  |  mr CARG3, RD
-  |  mr CARG4, RD
+  |  add CARG3, BASE, RD
+  |  add CARG4, BASE, RD
   |  b >1
   |
   |->vmeta_arith_vn:
@@ -1235,7 +1227,7 @@ static void build_subroutines(BuildCtx *ctx)
 #if LJ_52
   |  mr SAVE0, CARG1
 #endif
-  |  mr CARG2, RD
+  |  add CARG2, BASE, RD
   |   stp BASE, L->base
   |  mr CARG1, L
   |   stw PC, SAVE_PC
@@ -3066,13 +3058,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISLT: case BC_ISGE: case BC_ISLE: case BC_ISGT:
     |  // RA = src1*8, RD = src2*8, JMP with RD = target
     |.if DUALNUM
-    |  lwzux TMP0, RA, BASE
+    |  lwzx TMP0, BASE_HI, RA
     |    addi PC, PC, 4
-    |   lwz CARG2, 4(RA)
-    |  lwzux TMP1, RD, BASE
+    |   lwzx CARG2, BASE_LO, RA
+    |  lwzx TMP1, BASE_HI, RD
     |    lwz TMP2, -4(PC)
     |  checknum cr0, TMP0
-    |   lwz CARG3, 4(RD)
+    |   lwzx CARG3, BASE_LO, RD
     |    decode_RD4 TMP2, TMP2
     |  checknum cr1, TMP1
     |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
@@ -3096,7 +3088,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |7:  // RA is not an integer.
     |  bgt cr0, ->vmeta_comp
     |  // RA is a number.
-    |   lfd f0, 0(RA)
+    |   lfdx f0, BASE, RA
     |  bgt cr1, ->vmeta_comp
     |  blt cr1, >4
     |  // RA is a number, RD is an integer.
@@ -3108,7 +3100,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // RA is an integer, RD is a number.
     |  tonum_i f0, CARG2
     |4:
-    |  lfd f1, 0(RD)
+    |  lfdx f1, BASE, RD
     |5:
     |  fcmpu cr0, f0, f1
     if (op == BC_ISLT) {
@@ -3158,15 +3150,23 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     vk = op == BC_ISEQV;
     |  // RA = src1*8, RD = src2*8, JMP with RD = target
     |.if DUALNUM
-    |  lwzux TMP0, RA, BASE
+    |  lwzx TMP0, BASE_HI, RA
     |    addi PC, PC, 4
-    |   lwz CARG2, 4(RA)
-    |  lwzux TMP1, RD, BASE
+    |   lwzx CARG2, BASE_LO, RA
+    |  .if ENDIAN_LE
+    |    lwzx TMP1, BASE_HI, RD
+    |  .else
+    |    lwzux TMP1, RD, BASE_HI
+    |  .endif
     |  checknum cr0, TMP0
     |    lwz TMP2, -4(PC)
     |  checknum cr1, TMP1
     |    decode_RD4 TMP2, TMP2
-    |   lwz CARG3, 4(RD)
+    |  .if ENDIAN_LE
+    |   lwzux CARG3, RD, BASE_LO
+    |  .else
+    |   lwz CARG3, WORD_LO(RD)
+    |  .endif
     |  cror 4*cr7+gt, 4*cr0+gt, 4*cr1+gt
     |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
     if (vk) {
@@ -3175,14 +3175,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
       |  ble cr7, ->BC_ISNEN_Z
     }
     |.else
-    |  lwzux TMP0, RA, BASE
+    |  lwzx TMP0, BASE_HI, RA
     |   lwz TMP2, 0(PC)
-    |    lfd f0, 0(RA)
+    |    lfdx f0, BASE, RA
     |   addi PC, PC, 4
-    |  lwzux TMP1, RD, BASE
+    |  lwzx TMP1, BASE_HI, RD
     |  checknum cr0, TMP0
     |   decode_RD4 TMP2, TMP2
-    |    lfd f1, 0(RD)
+    |    lfdx f1, BASE, RD
     |  checknum cr1, TMP1
     |   addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
     |  bge cr0, >5
@@ -3200,8 +3200,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |.endif
     |5:  // Either or both types are not numbers.
     |.if not DUALNUM
-    |    lwz CARG2, 4(RA)
-    |    lwz CARG3, 4(RD)
+    |    lwzx CARG2, BASE_LO, RA
+    |    lwzx CARG3, BASE_LO, RD
     |.endif
     |.if FFI
     |  cmpwi cr7, TMP0, LJ_TCDATA
@@ -3265,9 +3265,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_ISEQS: case BC_ISNES:
     vk = op == BC_ISEQS;
     |  // RA = src*8, RD = str_const*8 (~), JMP with RD = target
-    |  lwzux TMP0, RA, BASE
+    |  lwzx TMP0, BASE_HI, RA
     |   srwi RD, RD, 1
-    |  lwz STR:TMP3, 4(RA)
+    |  lwzx STR:TMP3, BASE_LO, RA
     |    lwz TMP2, 0(PC)
     |   subfic RD, RD, -4
     |    addi PC, PC, 4
@@ -3299,15 +3299,14 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     vk = op == BC_ISEQN;
     |  // RA = src*8, RD = num_const*8, JMP with RD = target
     |.if DUALNUM
-    |  lwzux TMP0, RA, BASE
+    |  lwzx TMP0, BASE_HI, RA
     |    addi PC, PC, 4
-    |   lwz CARG2, 4(RA)
-    |  lwzux TMP1, RD, KBASE
+    |   lwzx CARG2, BASE_LO, RA
+    |  lwzux2 TMP1, CARG3, RD, KBASE
     |  checknum cr0, TMP0
     |    lwz TMP2, -4(PC)
     |  checknum cr1, TMP1
     |    decode_RD4 TMP2, TMP2
-    |   lwz CARG3, 4(RD)
     |    addis TMP2, TMP2, -(BCBIAS_J*4 >> 16)
     if (vk) {
       |->BC_ISEQN_Z:
@@ -3362,7 +3361,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |7:  // RA is not an integer.
     |  bge cr0, <3
     |  // RA is a number.
-    |   lfd f0, 0(RA)
+    |   lfdx f0, BASE, RA
     |  blt cr1, >1
     |  // RA is a number, RD is an integer.
     |  tonum_i f1, CARG3
@@ -3479,17 +3478,17 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
   case BC_NOT:
     |  // RA = dst*8, RD = src*8
     |  ins_next1
-    |  lwzx TMP0, BASE, RD
+    |  lwzx TMP0, BASE_HI, RD
     |  .gpr64 extsw TMP0, TMP0
     |  subfic TMP1, TMP0, LJ_TTRUE
     |  adde TMP0, TMP0, TMP1
-    |  stwx TMP0, BASE, RA
+    |  stwx TMP0, BASE_HI, RA
     |  ins_next2
     break;
   case BC_UNM:
     |  // RA = dst*8, RD = src*8
-    |  lwzux TMP1, RD, BASE
-    |   lwz TMP0, 4(RD)
+    |  lwzx TMP1, BASE_HI, RD
+    |   lwzx TMP0, BASE_LO, RD
     |  checknum TMP1
     |.if DUALNUM
     |  bne >5
@@ -3504,8 +3503,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |1:
     |.endif
     |  ins_next1
-    |  stwux TISNUM, RA, BASE
-    |   stw TMP0, 4(RA)
+    |  stwx TISNUM, BASE_HI, RA
+    |   stwx TMP0, BASE_LO, RA
     |3:
     |  ins_next2
     |4:
@@ -3522,8 +3521,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  xoris TMP1, TMP1, 0x8000
     |7:
     |  ins_next1
-    |  stwux TMP1, RA, BASE
-    |   stw TMP0, 4(RA)
+    |  stwx TMP1, BASE_HI, RA
+    |   stwx TMP0, BASE_LO, RA
     |.if DUALNUM
     |  b <3
     |.else
@@ -3532,15 +3531,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_LEN:
     |  // RA = dst*8, RD = src*8
-    |  lwzux TMP0, RD, BASE
-    |   lwz CARG1, 4(RD)
+    |  lwzx TMP0, BASE_HI, RD
+    |   lwzx CARG1, BASE_LO, RD
     |  checkstr TMP0; bne >2
     |  lwz CRET1, STR:CARG1->len
     |1:
     |.if DUALNUM
     |  ins_next1
-    |  stwux TISNUM, RA, BASE
-    |   stw CRET1, 4(RA)
+    |  stwx TISNUM, BASE_HI, RA
+    |   stwx CRET1, BASE_LO, RA
     |.else
     |  tonum_u f0, CRET1		// Result is a non-negative integer.
     |  ins_next1
@@ -3729,8 +3728,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bso >4
     |1:
     |  ins_next1
-    |  stwux TISNUM, RA, BASE
-    |  stw CARG1, 4(RA)
+    |  stwx TISNUM, BASE_HI, RA
+    |  stwx CARG1, BASE_LO, RA
     |2:
     |  ins_next2
     |4:  // Overflow.
@@ -3852,8 +3851,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next1
     |  lwzx TMP0, KBASE, TMP1		// KBASE-4-str_const*4
     |  li TMP2, LJ_TSTR
-    |  stwux TMP2, RA, BASE
-    |  stw TMP0, 4(RA)
+    |  stwx TMP2, BASE_HI, RA
+    |  stwx TMP0, BASE_LO, RA
     |  ins_next2
     break;
   case BC_KCDATA:
@@ -3864,8 +3863,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  ins_next1
     |  lwzx TMP0, KBASE, TMP1		// KBASE-4-cdata_const*4
     |  li TMP2, LJ_TCDATA
-    |  stwux TMP2, RA, BASE
-    |  stw TMP0, 4(RA)
+    |  stwx TMP2, BASE_HI, RA
+    |  stwx TMP0, BASE_LO, RA
     |  ins_next2
     |.endif
     break;
@@ -3875,8 +3874,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  slwi RD, RD, 13
     |  srawi RD, RD, 16
     |  ins_next1
-    |   stwux TISNUM, RA, BASE
-    |   stw RD, 4(RA)
+    |   stwx TISNUM, BASE_HI, RA
+    |   stwx RD, BASE_LO, RA
     |  ins_next2
     |.else
     |  // The soft-float approach is faster.
@@ -3894,8 +3893,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   add RD, RD, TMP1		// hi = hi + exponent-1
     |    and RD, RD, TMP0		// hi = x == 0 ? 0 : hi
     |  ins_next1
-    |    stwux RD, RA, BASE
-    |    stw ZERO, 4(RA)
+    |    stwx RD, BASE_HI, RA
+    |    stwx ZERO, BASE_LO, RA
     |  ins_next2
     |.endif
     break;
@@ -4058,8 +4057,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Returns GCfuncL *.
     |  lp BASE, L->base
     |   li TMP0, LJ_TFUNC
-    |  stwux TMP0, RA, BASE
-    |  stw LFUNC:CRET1, 4(RA)
+    |  stwx TMP0, BASE_HI, RA
+    |  stwx LFUNC:CRET1, BASE_LO, RA
     |  ins_next
     break;
 
@@ -4092,8 +4091,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     }
     |  lp BASE, L->base
     |   li TMP0, LJ_TTAB
-    |  stwux TMP0, RA, BASE
-    |  stw TAB:CRET1, 4(RA)
+    |  addi BASEP4, BASE, 4
+    |  stwx TMP0, BASE_HI, RA
+    |  stwx TAB:CRET1, BASE_LO, RA
     |  ins_next
     if (op == BC_TNEW) {
       |3:
@@ -4126,13 +4126,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_TGETV:
     |  // RA = dst*8, RB = table*8, RC = key*8
-    |  lwzux CARG1, RB, BASE
-    |  lwzux CARG2, RC, BASE
-    |   lwz TAB:RB, 4(RB)
+    |  lwzx CARG1, BASE_HI, RB
+    |  lwzx CARG2, BASE_HI, RC
+    |   lwzx TAB:RB, BASE_LO, RB
     |.if DUALNUM
-    |   lwz RC, 4(RC)
+    |   lwzx RC, BASE_LO, RC
     |.else
-    |   lfd f0, 0(RC)
+    |   lfdx f0, BASE, RC
     |.endif
     |  checktab CARG1
     |   checknum cr1, CARG2
@@ -4184,15 +4184,15 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:
     |  checkstr CARG2; bne ->vmeta_tgetv
     |.if not DUALNUM
-    |  lwz STR:RC, 4(RC)
+    |  lwzx STR:RC, BASE_LO, RC
     |.endif
     |  b ->BC_TGETS_Z			// String key?
     break;
   case BC_TGETS:
     |  // RA = dst*8, RB = table*8, RC = str_const*8 (~)
-    |  lwzux CARG1, RB, BASE
+    |  lwzx CARG1, BASE_HI, RB
     |   srwi TMP1, RC, 1
-    |    lwz TAB:RB, 4(RB)
+    |    lwzx TAB:RB, BASE_LO, RB
     |   subfic TMP1, TMP1, -4
     |  checktab CARG1
     |   lwzx STR:RC, KBASE, TMP1	// KBASE-4-str_const*4
@@ -4216,8 +4216,8 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   cmpw TMP0, STR:RC; bne >4
     |    checknil CARG2; beq >5		// Key found, but nil value?
     |3:
-    |    stwux CARG2, RA, BASE
-    |     stw TMP1, 4(RA)
+    |    stwx CARG2, BASE_HI, RA
+    |     stwx TMP1, BASE_LO, RA
     |  ins_next
     |
     |4:  // Follow hash chain.
@@ -4238,9 +4238,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TGETB:
     |  // RA = dst*8, RB = table*8, RC = index*8
-    |  lwzux CARG1, RB, BASE
+    |  lwzx CARG1, BASE_HI, RB
     |   srwi TMP0, RC, 3
-    |   lwz TAB:RB, 4(RB)
+    |   lwzx TAB:RB, BASE_LO, RB
     |  checktab CARG1; bne ->vmeta_tgetb
     |  lwz TMP1, TAB:RB->asize
     |   lwz TMP2, TAB:RB->array
@@ -4269,12 +4269,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TGETR:
     |  // RA = dst*8, RB = table*8, RC = key*8
-    |  add RB, BASE, RB
-    |  lwz TAB:CARG1, 4(RB)
+    |  lwzx TAB:CARG1, BASE_LO, RB
     |.if DUALNUM
-    |  add RC, BASE, RC
     |  lwz TMP0, TAB:CARG1->asize
-    |  lwz CARG2, 4(RC)
+    |  lwzx CARG2, BASE_LO, RC
     |   lwz TMP1, TAB:CARG1->array
     |.else
     |  lfdx f0, BASE, RC
@@ -4294,13 +4292,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
 
   case BC_TSETV:
     |  // RA = src*8, RB = table*8, RC = key*8
-    |  lwzux CARG1, RB, BASE
-    |  lwzux CARG2, RC, BASE
-    |   lwz TAB:RB, 4(RB)
+    |  lwzx CARG1, BASE_HI, RB
+    |  lwzx CARG2, BASE_HI, RC
+    |   lwzx TAB:RB, BASE_LO, RB
     |.if DUALNUM
-    |   lwz RC, 4(RC)
+    |   lwzx RC, BASE_LO, RC
     |.else
-    |   lfd f0, 0(RC)
+    |   lfdx f0, BASE, RC
     |.endif
     |  checktab CARG1
     |   checknum cr1, CARG2
@@ -4355,7 +4353,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |5:
     |  checkstr CARG2; bne ->vmeta_tsetv
     |.if not DUALNUM
-    |  lwz STR:RC, 4(RC)
+    |  lwzx STR:RC, BASE_LO, RC
     |.endif
     |  b ->BC_TSETS_Z			// String key?
     |
@@ -4365,9 +4363,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETS:
     |  // RA = src*8, RB = table*8, RC = str_const*8 (~)
-    |  lwzux CARG1, RB, BASE
+    |  lwzx CARG1, BASE_HI, RB
     |   srwi TMP1, RC, 1
-    |    lwz TAB:RB, 4(RB)
+    |    lwzx TAB:RB, BASE_LO, RB
     |   subfic TMP1, TMP1, -4
     |  checktab CARG1
     |   lwzx STR:RC, KBASE, TMP1	// KBASE-4-str_const*4
@@ -4444,9 +4442,9 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETB:
     |  // RA = src*8, RB = table*8, RC = index*8
-    |  lwzux CARG1, RB, BASE
+    |  lwzx CARG1, BASE_HI, RB
     |   srwi TMP0, RC, 3
-    |   lwz TAB:RB, 4(RB)
+    |   lwzx TAB:RB, BASE_LO, RB
     |  checktab CARG1; bne ->vmeta_tsetb
     |  lwz TMP1, TAB:RB->asize
     |   lwz TMP2, TAB:RB->array
@@ -4483,13 +4481,11 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     break;
   case BC_TSETR:
     |  // RA = dst*8, RB = table*8, RC = key*8
-    |  add RB, BASE, RB
-    |  lwz TAB:CARG2, 4(RB)
+    |  lwzx TAB:CARG2, BASE_LO, RB
     |.if DUALNUM
-    |  add RC, BASE, RC
     |    lbz TMP3, TAB:CARG2->marked
     |  lwz TMP0, TAB:CARG2->asize
-    |  lwz CARG3, 4(RC)
+    |  lwzx CARG3, BASE_LO, RC
     |   lwz TMP1, TAB:CARG2->array
     |.else
     |  lfdx f0, BASE, RC
