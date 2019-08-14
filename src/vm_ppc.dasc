@@ -5019,6 +5019,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bne ->vmeta_tgets1
     |->BC_TGETS_Z:
     |  // TAB:RB = GCtab *, STR:RC = GCstr *, RA = dst*8
+    |  addi BASEP4, BASE, 4
     |  lwz TMP0, TAB:RB->hmask
     |  lwz TMP1, STR:RC->hash
     |  lwz NODE:TMP2, TAB:RB->node
