@@ -647,7 +647,6 @@ static void build_subroutines(BuildCtx *ctx)
   |   mr RD, SAVE0
   |    slwi TMP2, TMP2, 3
   |  lp BASE, L->top			// Need the (realloced) L->top in BASE.
-  |  addi BASEP4, BASE, 4
   |  b <2
   |
   |->vm_unwind_c:			// Unwind C stack, return from vm_pcall.
@@ -679,7 +678,6 @@ static void build_subroutines(BuildCtx *ctx)
   |     li TISNUM, LJ_TISNUM		// Setup type comparison constants.
   |.endif
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |     lus TMP3, 0x59c0		// TOBIT = 2^52 + 2^51 (float).
   |   lwz DISPATCH, L->glref		// Setup pointer to dispatch table.
   |     li ZERO, 0
@@ -721,7 +719,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  mr CARG1, L
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |  lp RC, L->top
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)
   |  sub RC, RC, BASE
@@ -755,7 +752,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  stw L, DISPATCH_GL(cur_L)(DISPATCH)
   |  mr RA, BASE
   |   lp BASE, L->base
-  |   addi BASEP4, BASE, 4
   |.if P64
   |     lus TISNUM, LJ_TISNUM >> 16	// Setup type comparison constants.
   |     ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
@@ -998,7 +994,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = base, L->top = new base, stack = cont/func/t/k
   |  subfic TMP1, BASE, FRAME_CONT
   |  lp BASE, L->top
-  |  addi BASEP4, BASE, 4
   |  stw PC, FRAME_CONTPC(BASE)		// [cont|PC]
   |   add PC, TMP1, BASE
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
@@ -1076,7 +1071,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  // BASE = base, L->top = new base, stack = cont/func/t/k/(v)
   |  subfic TMP1, BASE, FRAME_CONT
   |  lp BASE, L->top
-  |  addi BASEP4, BASE, 4
   |  stw PC, FRAME_CONTPC(BASE)		// [cont|PC]
   |   add PC, TMP1, BASE
   |  lwz LFUNC:RB, FRAME_FUNC(BASE)	// Guaranteed to be a function here.
@@ -1769,7 +1763,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  lp TMP3, L:SAVE0->top
   |    li_vmstate INTERP
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |    stw L, DISPATCH_GL(cur_L)(DISPATCH)
   |    st_vmstate
   |   bgt >8
@@ -2245,7 +2238,6 @@ static void build_subroutines(BuildCtx *ctx)
   |->fff_resstr:
   |  // Returns GCstr *.
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |  li CARG3, LJ_TSTR
   |  b ->fff_restv
   |
@@ -2486,7 +2478,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  bctrl				// (lua_State *L)
   |  // Either throws an error, or recovers and returns -1, 0 or nresults+1.
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |  .toc lp TOCREG, SAVE_TOC
   |  cmpwi CRET1, 0
   |   slwi RD, CRET1, 3
@@ -2515,7 +2506,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  li CARG2, LUA_MINSTACK
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |  cmpw TMP0, TMP0			// Set 4*cr0+eq to force retry.
   |  b <1
   |
@@ -2529,7 +2519,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  mr CARG1, L
   |  bl extern lj_gc_step		// (lua_State *L)
   |   lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |  mtlr SAVE0
   |    lp TMP0, L->top
   |   sub NARGS8:RC, TMP0, BASE
@@ -2643,7 +2632,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern lj_dispatch_call		// (lua_State *L, const BCIns *pc)
   |  // Returns ASMFunction.
   |  lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |   lp TMP0, L->top
   |   stw ZERO, SAVE_PC			// Invalidate for subsequent line hook.
   |  addi BASEP4, BASE, 4
@@ -2755,7 +2743,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  savex_ 28,29,30,31
   |   sub CARG3, TMP0, CARG3		// Compute exit number.
   |  lp BASE, DISPATCH_GL(jit_base)(DISPATCH)
-  |  addi BASEP4, BASE, 4
   |   srwi CARG3, CARG3, 2
   |  stp L, DISPATCH_J(L)(DISPATCH)
   |   subi CARG3, CARG3, 2
@@ -2770,7 +2757,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  lp TMP1, L->cframe
   |  lwz TMP2, 0(sp)
   |   lp BASE, L->base
-  |  addi BASEP4, BASE, 4
   |.if GPR64
   |  rldicr sp, TMP1, 0, 61
   |.else
@@ -2950,7 +2936,6 @@ static void build_subroutines(BuildCtx *ctx)
   |  bl extern lj_ccallback_enter	// (CTState *cts, void *cf)
   |  // Returns lua_State *.
   |  lp BASE, L:CRET1->base
-  |  addi BASEP4, BASE, 4
   |.if P64
   |     lus TISNUM, LJ_TISNUM >> 16	// Setup type comparison constants.
   |     ori TISNUM, TISNUM, LJ_TISNUM & 0xffff
@@ -4054,7 +4039,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |   add CARG2, BASE, RA
     |  bl extern lj_func_closeuv	// (lua_State *L, TValue *level)
     |  lp BASE, L->base
-    |  addi BASEP4, BASE, 4
     |1:
     |  ins_next
     break;
@@ -4072,7 +4056,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bl extern lj_func_newL_gc
     |  // Returns GCfuncL *.
     |  lp BASE, L->base
-    |  addi BASEP4, BASE, 4
     |   li TMP0, LJ_TFUNC
     |  stwx TMP0, BASE_HI, RA
     |  stwx LFUNC:CRET1, BASE_LO, RA
@@ -4836,7 +4819,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  srwi CARG2, TMP1, 3
     |  bl extern lj_state_growstack	// (lua_State *L, int n)
     |  lp BASE, L->base
-    |  addi BASEP4, BASE, 4
     |  add RA, BASE, RA
     |  add RC, BASE, SAVE0
     |  subi TMP3, BASE, 8
@@ -5304,7 +5286,6 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  bctrl				// (lua_State *L [, lua_CFunction f])
     |  // Returns nresults.
     |  lp BASE, L->base
-    |  addi BASEP4, BASE, 4
     |  .toc ld TOCREG, SAVE_TOC
     |   slwi RD, CRET1, 3
     |  lp TMP1, L->top
